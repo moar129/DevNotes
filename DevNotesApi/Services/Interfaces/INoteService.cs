@@ -6,8 +6,10 @@ namespace DevNotesApi.Services.Interfaces
     {
         Task<IEnumerable<Note>> GetNotesByUserAsync(int folderId, string userId);
         Task<Note?> GetNoteByIdAsync(int id, string userId);
-        Task<Note> CreateNoteAsync(Note note, string userId);
+        Task<Note?> CreateNoteAsync(Note note, string userId);
         Task<Note?> UpdateNoteAsync(Note note, string userId);
         Task<Note?> DeleteNoteAsync(Note note, string userId);
+        Task<NoteImage?> AddImageToNoteAsync(int noteId, NoteImage image, string userId);
+        Task<bool> RemoveImageFromNoteAsync(int noteId, int imageId, string userId);
     }
 }

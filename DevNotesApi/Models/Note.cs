@@ -16,9 +16,9 @@ namespace DevNotesApi.Models
         // Entity Framework Core will automatically manage these properties
         [Required]
         public string UserId { get; set; }
-        public ApplicationUser User { get; set; }
+        public ApplicationUser? User { get; set; }
         public int? FolderId { get; set; }
-        public Folder Folder { get; set; }
+        public Folder? Folder { get; set; }
 
         // Navigation properties
         public ICollection<NoteImage> Images { get; set; }

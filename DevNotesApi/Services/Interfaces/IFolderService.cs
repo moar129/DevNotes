@@ -6,7 +6,7 @@ namespace DevNotesApi.Services.Interfaces
     {
         Task<IEnumerable<Folder>> GetFoldersByUserAsync(string userId);
         Task<Folder?> GetFolderByIdAsync(int id, string userId);
-        Task<Folder> CreateFolderAsync(Folder folder, string userId);
+        Task<Folder?> CreateFolderAsync(Folder folder, string userId);
         Task<Folder?> UpdateFolderAsync(Folder folder, string userId);
         Task<Folder?> DeleteFolderAsync(Folder folder, string userId);
     }
