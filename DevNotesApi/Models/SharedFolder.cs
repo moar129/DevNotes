@@ -1,5 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DevNotesApi.Models
 {
@@ -7,24 +7,22 @@ namespace DevNotesApi.Models
     {
         public int Id { get; set; }
 
+        // Folder FK
         [Required]
         public int FolderId { get; set; }
+        public Folder? Folder { get; set; }
 
-        [ForeignKey(nameof(FolderId))]
-        public Folder Folder { get; set; } = null!;
-
+        // Sender FK
         [Required]
         public string SenderId { get; set; } = null!;
+        public ApplicationUser? Sender { get; set; }
 
-        [ForeignKey(nameof(SenderId))]
-        public ApplicationUser Sender { get; set; } = null!;
-
+        // Receiver FK
         [Required]
         public string ReceiverId { get; set; } = null!;
+        public ApplicationUser? Receiver { get; set; }
 
-        [ForeignKey(nameof(ReceiverId))]
-        public ApplicationUser Receiver { get; set; } = null!;
-
+        // Timestamp
         public DateTime SharedAt { get; set; } = DateTime.UtcNow;
     }
 }
