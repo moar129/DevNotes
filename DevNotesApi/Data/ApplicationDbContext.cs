@@ -15,6 +15,7 @@ namespace DevNotesApi.Data
         public DbSet<Note> Notes { get; set; }
         public DbSet<NoteImage> NoteImages { get; set; }
         public DbSet<SharedNote> SharedNotes { get; set; }
+        public DbSet<SharedFolder> SharedFolders { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -72,6 +73,25 @@ namespace DevNotesApi.Data
                 .HasOne(s => s.ToUser)
                 .WithMany()
                 .HasForeignKey(s => s.ToUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // SharedFolder relationships
+            builder.Entity<SharedFolder>()
+                .HasOne(sf => sf.Folder)
+                .WithMany()
+                .HasForeignKey(sf => sf.FolderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<SharedFolder>()
+                .HasOne(sf => sf.Sender)
+                .WithMany()
+                .HasForeignKey(sf => sf.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<SharedFolder>()
+                .HasOne(sf => sf.Receiver)
+                .WithMany()
+                .HasForeignKey(sf => sf.ReceiverId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }

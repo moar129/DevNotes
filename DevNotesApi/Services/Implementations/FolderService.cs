@@ -1,4 +1,5 @@
-﻿using DevNotesApi.Services.Interfaces;
+﻿using DevNotesApi.Models;
+using DevNotesApi.Services.Interfaces;
 
 namespace DevNotesApi.Services.Implementations
 {
