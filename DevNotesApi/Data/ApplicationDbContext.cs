@@ -1,0 +1,78 @@
+﻿using DevNotesApi.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+
+namespace DevNotesApi.Data
+{
+    public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
+    {
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+            : base(options)
+        {
+        }
+
+        public DbSet<Folder> Folders { get; set; }
+        public DbSet<Note> Notes { get; set; }
+        public DbSet<NoteImage> NoteImages { get; set; }
+        public DbSet<SharedNote> SharedNotes { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+
+            // Folder self-referencing relationship (ParentFolder -> SubFolders)
+            builder.Entity<Folder>()
+                .HasOne(f => f.ParentFolder)
+                .WithMany(f => f.SubFolders)
+                .HasForeignKey(f => f.ParentFolderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Folder -> User relationship
+            builder.Entity<Folder>()
+                .HasOne(f => f.User)
+                .WithMany(u => u.Folders)
+                .HasForeignKey(f => f.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Note -> User relationship
+            builder.Entity<Note>()
+                .HasOne(n => n.User)
+                .WithMany(u => u.Notes)
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Note -> Folder relationship
+            builder.Entity<Note>()
+                .HasOne(n => n.Folder)
+                .WithMany(f => f.Notes)
+                .HasForeignKey(n => n.FolderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // NoteImage -> Note relationship
+            builder.Entity<NoteImage>()
+                .HasOne(i => i.Note)
+                .WithMany(n => n.Images)
+                .HasForeignKey(i => i.NoteId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // SharedNote relationships
+            builder.Entity<SharedNote>()
+                .HasOne(s => s.Note)
+                .WithMany()
+                .HasForeignKey(s => s.NoteId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<SharedNote>()
+                .HasOne(s => s.FromUser)
+                .WithMany()
+                .HasForeignKey(s => s.FromUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<SharedNote>()
+                .HasOne(s => s.ToUser)
+                .WithMany()
+                .HasForeignKey(s => s.ToUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        }
+    }
+}
