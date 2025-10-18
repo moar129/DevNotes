@@ -7,6 +7,7 @@ namespace DevNotesApi.Services.Implementations
 {
     /// <summary>
     /// Handles logic for sharing folders between users.
+    /// Returns null when operations are invalid.
     /// </summary>
     public class SharedFolderService : ISharedFolderService
     {
@@ -18,7 +19,7 @@ namespace DevNotesApi.Services.Implementations
         }
 
         /// <summary>
-        /// Get all folders shared with or by the user.
+        /// Get all folders shared *with* or *by* the specified user.
         /// </summary>
         public async Task<IEnumerable<SharedFolder>> GetSharedFoldersForUserAsync(string userId)
         {
@@ -32,6 +33,7 @@ namespace DevNotesApi.Services.Implementations
 
         /// <summary>
         /// Share a folder from one user to another.
+        /// Returns null if invalid (self-share, non-existent folder, receiver, or duplicate).
         /// </summary>
         public async Task<SharedFolder?> ShareFolderAsync(int folderId, string senderId, string receiverId)
         {
@@ -39,19 +41,19 @@ namespace DevNotesApi.Services.Implementations
             if (senderId == receiverId)
                 return null;
 
-            // Validate that the sender owns the folder
+            // Validate sender owns the folder
             var folder = await _context.Folders
                 .FirstOrDefaultAsync(f => f.Id == folderId && f.UserId == senderId);
 
             if (folder == null)
                 return null;
 
-            // Validate that the receiver actually exists
+            // Validate receiver exists
             var receiverExists = await _context.Users.AnyAsync(u => u.Id == receiverId);
             if (!receiverExists)
                 return null;
 
-            // Prevent duplicate sharing between same sender, receiver, and folder
+            // Prevent duplicate sharing
             bool alreadyShared = await _context.SharedFolders
                 .AnyAsync(sf =>
                     sf.FolderId == folderId &&
@@ -61,7 +63,7 @@ namespace DevNotesApi.Services.Implementations
             if (alreadyShared)
                 return null;
 
-            // Create and save the shared folder record
+            // Create the shared folder record
             var sharedFolder = new SharedFolder
             {
                 FolderId = folderId,
@@ -77,7 +79,9 @@ namespace DevNotesApi.Services.Implementations
         }
 
         /// <summary>
-        /// Retrieve a specific shared folder either sender or receiver can access it.
+        /// Get a shared folder by ID.
+        /// Only accessible to the sender or receiver.
+        /// Returns null if not found or user has no access.
         /// </summary>
         public async Task<SharedFolder?> GetSharedFolderAsync(int sharedFolderId, string userId)
         {
@@ -91,18 +95,26 @@ namespace DevNotesApi.Services.Implementations
         }
 
         /// <summary>
-        /// Remove a shared folder (either sender or receiver can remove access).
+        /// Remove a shared folder (sender or receiver can remove access).
+        /// Returns null if user cannot remove it.
         /// </summary>
         public async Task<SharedFolder?> RemoveSharedFolderAsync(SharedFolder sharedFolder, string userId)
         {
-            // Only the sender or receiver can remove a shared folder
+            // Always check ownership even if the entity is passed in
             if (sharedFolder.SenderId != userId && sharedFolder.ReceiverId != userId)
                 return null;
 
-            _context.SharedFolders.Remove(sharedFolder);
+            // Optionally, reload from DB to ensure the entity exists
+            var existing = await _context.SharedFolders
+                .FirstOrDefaultAsync(sf => sf.Id == sharedFolder.Id);
+
+            if (existing == null)
+                return null;
+
+            _context.SharedFolders.Remove(existing);
             await _context.SaveChangesAsync();
 
-            return sharedFolder;
+            return existing;
         }
     }
 }

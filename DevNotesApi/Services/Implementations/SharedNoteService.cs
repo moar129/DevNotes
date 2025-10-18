@@ -39,45 +39,48 @@ namespace DevNotesApi.Services.Implementations
             if (fromUserId == toUserId)
                 return null;
 
-            // Validate that the sender owns the note
+            // Validate sender owns the note
             var note = await _context.Notes
                 .FirstOrDefaultAsync(n => n.Id == noteId && n.UserId == fromUserId);
-
             if (note == null)
                 return null;
 
-            // Ensure receiver exists
+            // Validate receiver exists
             var receiverExists = await _context.Users.AnyAsync(u => u.Id == toUserId);
             if (!receiverExists)
                 return null;
 
-            // Prevent duplicate sharing (same sender, receiver, and note)
+            // Prevent duplicate sharing
             bool alreadyShared = await _context.SharedNotes
                 .AnyAsync(sn =>
                     sn.NoteId == noteId &&
                     sn.FromUserId == fromUserId &&
                     sn.ToUserId == toUserId);
-
             if (alreadyShared)
                 return null;
 
-            // Create and save shared note
+            // Create shared note
             var sharedNote = new SharedNote
             {
                 NoteId = noteId,
                 FromUserId = fromUserId,
                 ToUserId = toUserId,
-                SharedAt = DateTime.Now
+                SharedAt = DateTime.UtcNow
             };
 
             _context.SharedNotes.Add(sharedNote);
             await _context.SaveChangesAsync();
 
+            // Optionally load related entities
+            await _context.Entry(sharedNote).Reference(sn => sn.Note).LoadAsync();
+            await _context.Entry(sharedNote).Reference(sn => sn.FromUser).LoadAsync();
+            await _context.Entry(sharedNote).Reference(sn => sn.ToUser).LoadAsync();
+
             return sharedNote;
         }
 
         /// <summary>
-        /// Retrieve a specific shared note (sender or receiver can access).
+        /// Retrieve a specific shared note (sender or receiver can access it).
         /// </summary>
         public async Task<SharedNote?> GetSharedNoteAsync(int sharedNoteId, string userId)
         {
@@ -95,14 +98,21 @@ namespace DevNotesApi.Services.Implementations
         /// </summary>
         public async Task<SharedNote?> RemoveSharedNoteAsync(SharedNote sharedNote, string userId)
         {
-            // Ensure only sender or receiver can remove
-            if (sharedNote.FromUserId != userId && sharedNote.ToUserId != userId)
+            // Ensure entity exists
+            var existing = await _context.SharedNotes
+                .FirstOrDefaultAsync(sn => sn.Id == sharedNote.Id);
+
+            if (existing == null)
                 return null;
 
-            _context.SharedNotes.Remove(sharedNote);
+            // Only sender or receiver can remove
+            if (existing.FromUserId != userId && existing.ToUserId != userId)
+                return null;
+
+            _context.SharedNotes.Remove(existing);
             await _context.SaveChangesAsync();
 
-            return sharedNote;
+            return existing;
         }
     }
 }

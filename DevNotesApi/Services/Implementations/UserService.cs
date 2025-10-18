@@ -22,12 +22,11 @@ namespace DevNotes.Services.Implementations
             _signInManager = signInManager;
         }
 
-        // ========================== Read =================================
+        // ========================== READ METHODS =================================
         /// <summary>
         /// Get a user by their unique ID.
+        /// Returns null if not found.
         /// </summary>
-        /// <param name="userId"></param>
-        /// <returns></returns>
         public async Task<ApplicationUser?> GetUserByIdAsync(string userId)
         {
             return await _userManager.Users
@@ -36,9 +35,8 @@ namespace DevNotes.Services.Implementations
 
         /// <summary>
         /// Get a user by their email address.
+        /// Returns null if not found.
         /// </summary>
-        /// <param name="email"></param>
-        /// <returns></returns>
         public async Task<ApplicationUser?> GetUserByEmailAsync(string email)
         {
             return await _userManager.FindByEmailAsync(email);
@@ -47,7 +45,6 @@ namespace DevNotes.Services.Implementations
         /// <summary>
         /// Get all users in the system.
         /// </summary>
-        /// <returns></returns>
         public async Task<IEnumerable<ApplicationUser>> GetAllUsersAsync()
         {
             return await _userManager.Users.ToListAsync();
@@ -56,30 +53,55 @@ namespace DevNotes.Services.Implementations
         // ========================== WRITE METHODS (CREATE / UPDATE / DELETE) =================================
         /// <summary>
         /// Create a new user with the specified password.
+        /// Validates that email and username are unique.
         /// </summary>
-        /// <param name="user"></param>
-        /// <param name="password"></param>
-        /// <returns></returns>
         public async Task<IdentityResult> CreateUserAsync(ApplicationUser user, string password)
         {
+            if (user == null)
+                throw new ArgumentNullException(nameof(user));
+
+            if (string.IsNullOrWhiteSpace(password))
+                throw new ArgumentException("Password cannot be empty.", nameof(password));
+
+            // Validate email uniqueness
+            var existingEmailUser = await _userManager.FindByEmailAsync(user.Email);
+            if (existingEmailUser != null)
+            {
+                return IdentityResult.Failed(new IdentityError
+                {
+                    Description = "Email is already in use."
+                });
+            }
+
+            // Validate username uniqueness
+            var existingUserName = await _userManager.FindByNameAsync(user.UserName);
+            if (existingUserName != null)
+            {
+                return IdentityResult.Failed(new IdentityError
+                {
+                    Description = "Username is already taken."
+                });
+            }
+
             return await _userManager.CreateAsync(user, password);
         }
 
         /// <summary>
         /// Update an existing user's details.
+        /// Returns IdentityResult indicating success or failure.
         /// </summary>
-        /// <param name="user"></param>
-        /// <returns></returns>
         public async Task<IdentityResult> UpdateUserAsync(ApplicationUser user)
         {
+            if (user == null)
+                throw new ArgumentNullException(nameof(user));
+
             return await _userManager.UpdateAsync(user);
         }
 
         /// <summary>
         /// Delete a user by their unique ID.
+        /// Returns IdentityResult indicating success or failure.
         /// </summary>
-        /// <param name="userId"></param>
-        /// <returns></returns>
         public async Task<IdentityResult> DeleteUserAsync(string userId)
         {
             var user = await _userManager.FindByIdAsync(userId);
@@ -88,7 +110,7 @@ namespace DevNotes.Services.Implementations
             {
                 return IdentityResult.Failed(new IdentityError
                 {
-                    Description = "User not found."
+                    Description = $"User with ID '{userId}' not found."
                 });
             }
 
@@ -98,19 +120,17 @@ namespace DevNotes.Services.Implementations
         // ======================== AUTHENTICATION METHODS ===================================
         /// <summary>
         /// Sign in a user using their email and password.
+        /// Returns SignInResult indicating success or failure.
         /// </summary>
-        /// <param name="email"></param>
-        /// <param name="password"></param>
-        /// <param name="rememberMe"></param>
-        /// <returns></returns>
         public async Task<SignInResult> PasswordSignInAsync(string email, string password, bool rememberMe)
         {
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+                return SignInResult.Failed;
+
             var user = await _userManager.FindByEmailAsync(email);
 
             if (user == null)
-            {
                 return SignInResult.Failed;
-            }
 
             return await _signInManager.PasswordSignInAsync(
                 user,
@@ -123,7 +143,6 @@ namespace DevNotes.Services.Implementations
         /// <summary>
         /// Sign out the currently authenticated user.
         /// </summary>
-        /// <returns></returns>
         public async Task SignOutAsync()
         {
             await _signInManager.SignOutAsync();
