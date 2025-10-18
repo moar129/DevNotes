@@ -9,14 +9,13 @@ namespace DevNotesApi.Services.Implementations
     /// Service for managing folders and their hierarchy (subfolders, notes, ownership).
     /// Handles CRUD operations for folders.
     /// </summary>
-    public class FolderService: IFolderService
+    public class FolderService : IFolderService
     {
-        // Database context for accessing folder data.
         private readonly ApplicationDbContext _context;
+
         /// <summary>
         /// Constructor injecting the database context.
         /// </summary>
-        /// <param name="context"></param>
         public FolderService(ApplicationDbContext context)
         {
             _context = context;
@@ -25,30 +24,21 @@ namespace DevNotesApi.Services.Implementations
         /// <summary>
         /// Get all folders owned by a specific user.
         /// </summary>
-        /// <param name="userId"></param>
-        /// <returns></returns>
         public async Task<IEnumerable<Folder>> GetFoldersByUserAsync(string userId)
         {
-            // Build a query to get all folders for the specified user.
             var query = _context.Folders
-                .Include(f => f.SubFolders)  // subfolders inside each folder
-                .Include(f => f.Notes)       // notes inside each folder
-                .Where(f => f.UserId == userId); // only folders owned by this user
+                .Include(f => f.SubFolders)
+                .Include(f => f.Notes)
+                .Where(f => f.UserId == userId);
 
-            // Execute the query asynchronously and return a List<Folder>
-            var folders = await query.ToListAsync();
-            return folders;
+            return await query.ToListAsync();
         }
+
         /// <summary>
-        /// Get a folder by its unique ID by its ID and user ownership.
+        /// Get a folder by its ID and user ownership.
         /// </summary>
-        /// <param name="id"></param>
-        /// <param name="userId"></param>
-        /// <returns></returns>
         public async Task<Folder?> GetFolderByIdAsync(int id, string userId)
         {
-            // Build a query to find the folder with matching Id and UserId.
-            // Using FirstOrDefaultAsync will return null if not found.
             var folder = await _context.Folders
                 .Include(f => f.SubFolders)
                 .Include(f => f.Notes)
@@ -58,91 +48,109 @@ namespace DevNotesApi.Services.Implementations
         }
 
         /// <summary>
-        /// Create a new folder in the database.
+        /// Create a new folder for a user, validating name and parent folder.
         /// </summary>
-        /// <param name="folder"></param>
-        /// <param name="userId"></param>
-        /// <returns></returns>
         public async Task<Folder?> CreateFolderAsync(Folder folder, string userId)
         {
-            // Assign the folder to the current user
             folder.UserId = userId;
 
-            // Check for duplicate folder name within the same parent folder
-            var existingFolder = await _context.Folders
-                .FirstOrDefaultAsync(f =>
-                    f.UserId == userId &&                          // Only consider folders owned by this user
-                    f.ParentFolderId == folder.ParentFolderId &&  // Must be in the same parent folder
-                    f.Name == folder.Name                          // Folder name must match
-                );
-
-            if (existingFolder != null)
+            // Validate parent folder exists (if specified)
+            if (folder.ParentFolderId.HasValue)
             {
-                // Folder already exists in this parent folder
-                // Return null or throw an exception depending on how you want to handle it
-                return null;
+                bool parentExists = await _context.Folders
+                    .AnyAsync(f => f.Id == folder.ParentFolderId.Value && f.UserId == userId);
+
+                if (!parentExists)
+                    return null; // Parent folder invalid
             }
 
-            // Add the folder to the database
-            _context.Folders.Add(folder);
+            // Check for duplicate folder name within same parent
+            var existingFolder = await _context.Folders
+                .FirstOrDefaultAsync(f =>
+                    f.UserId == userId &&
+                    f.ParentFolderId == folder.ParentFolderId &&
+                    f.Name == folder.Name);
 
-            // Save changes to persist it
+            if (existingFolder != null)
+                return null; // Duplicate name
+
+            _context.Folders.Add(folder);
             await _context.SaveChangesAsync();
 
-            // Return the newly created folder
             return folder;
         }
 
         /// <summary>
-        /// Update an existing folder's details.
+        /// Update an existing folder's name or parent.
         /// </summary>
-        /// <param name="folder"></param>
-        /// <param name="userId"></param>
-        /// <returns></returns>
         public async Task<Folder?> UpdateFolderAsync(Folder folder, string userId)
         {
-            // Find the existing folder by its ID and user ownership.
             var existingFolder = await _context.Folders
                 .FirstOrDefaultAsync(f => f.Id == folder.Id && f.UserId == userId);
 
-            // If the folder doesn't exist, return null.
             if (existingFolder == null)
                 return null;
 
-            // Update the folder's properties.
+            // Validate parent folder exists (if specified)
+            if (folder.ParentFolderId.HasValue)
+            {
+                bool parentExists = await _context.Folders
+                    .AnyAsync(f => f.Id == folder.ParentFolderId.Value && f.UserId == userId && f.Id != folder.Id);
+
+                if (!parentExists)
+                    return null; // Invalid parent
+            }
+
+            // Prevent duplicate folder name in the same parent
+            bool duplicateName = await _context.Folders
+                .AnyAsync(f => f.UserId == userId &&
+                               f.ParentFolderId == folder.ParentFolderId &&
+                               f.Name == folder.Name &&
+                               f.Id != folder.Id);
+
+            if (duplicateName)
+                return null;
+
             existingFolder.Name = folder.Name;
             existingFolder.ParentFolderId = folder.ParentFolderId;
 
-            // Save changes to the database.
             await _context.SaveChangesAsync();
-
-            // Return the updated folder.
             return existingFolder;
         }
 
         /// <summary>
-        /// Delete a folder from the database.
+        /// Recursively deletes a folder and all its notes, images, and subfolders.
         /// </summary>
-        /// <param name="folder"></param>
-        /// <param name="userId"></param>
-        /// <returns></returns>
         public async Task<Folder?> DeleteFolderAsync(Folder folder, string userId)
         {
-            // Find the existing folder by its ID and user ownership.
             var existingFolder = await _context.Folders
+                .Include(f => f.Notes)
+                    .ThenInclude(n => n.Images)
+                .Include(f => f.SubFolders)
                 .FirstOrDefaultAsync(f => f.Id == folder.Id && f.UserId == userId);
 
-            // If the folder doesn't exist, return null.
             if (existingFolder == null)
                 return null;
 
-            // Remove the folder from the DbSet.
+            // --- Step 1: Delete notes and images ---
+            foreach (var note in existingFolder.Notes.ToList())
+            {
+                _context.NoteImages.RemoveRange(note.Images);
+                _context.Notes.Remove(note);
+            }
+
+            // --- Step 2: Recursively delete subfolders ---
+            foreach (var subFolder in existingFolder.SubFolders.ToList())
+            {
+                await DeleteFolderAsync(subFolder, userId);
+            }
+
+            // --- Step 3: Delete the folder itself ---
             _context.Folders.Remove(existingFolder);
 
-            // Save changes to the database.
+            // Save all changes once
             await _context.SaveChangesAsync();
 
-            // Return the deleted folder.
             return existingFolder;
         }
     }
