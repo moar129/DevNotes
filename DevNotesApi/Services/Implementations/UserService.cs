@@ -23,28 +23,17 @@ namespace DevNotes.Services.Implementations
         }
 
         // ========================== READ METHODS =================================
-        /// <summary>
-        /// Get a user by their unique ID.
-        /// Returns null if not found.
-        /// </summary>
         public async Task<ApplicationUser?> GetUserByIdAsync(string userId)
         {
             return await _userManager.Users
                 .FirstOrDefaultAsync(u => u.Id == userId);
         }
 
-        /// <summary>
-        /// Get a user by their email address.
-        /// Returns null if not found.
-        /// </summary>
         public async Task<ApplicationUser?> GetUserByEmailAsync(string email)
         {
             return await _userManager.FindByEmailAsync(email);
         }
 
-        /// <summary>
-        /// Get all users in the system.
-        /// </summary>
         public async Task<IEnumerable<ApplicationUser>> GetAllUsersAsync()
         {
             return await _userManager.Users.ToListAsync();
@@ -88,20 +77,38 @@ namespace DevNotes.Services.Implementations
 
         /// <summary>
         /// Update an existing user's details.
-        /// Returns IdentityResult indicating success or failure.
+        /// Validates that email and username remain unique.
         /// </summary>
         public async Task<IdentityResult> UpdateUserAsync(ApplicationUser user)
         {
             if (user == null)
                 throw new ArgumentNullException(nameof(user));
 
+            // Check for duplicate email (ignore current user)
+            var emailUser = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.Email == user.Email && u.Id != user.Id);
+            if (emailUser != null)
+            {
+                return IdentityResult.Failed(new IdentityError
+                {
+                    Description = "Email is already in use by another user."
+                });
+            }
+
+            // Check for duplicate username (ignore current user)
+            var usernameUser = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.UserName == user.UserName && u.Id != user.Id);
+            if (usernameUser != null)
+            {
+                return IdentityResult.Failed(new IdentityError
+                {
+                    Description = "Username is already taken by another user."
+                });
+            }
+
             return await _userManager.UpdateAsync(user);
         }
 
-        /// <summary>
-        /// Delete a user by their unique ID.
-        /// Returns IdentityResult indicating success or failure.
-        /// </summary>
         public async Task<IdentityResult> DeleteUserAsync(string userId)
         {
             var user = await _userManager.FindByIdAsync(userId);
@@ -118,10 +125,6 @@ namespace DevNotes.Services.Implementations
         }
 
         // ======================== AUTHENTICATION METHODS ===================================
-        /// <summary>
-        /// Sign in a user using their email and password.
-        /// Returns SignInResult indicating success or failure.
-        /// </summary>
         public async Task<SignInResult> PasswordSignInAsync(string email, string password, bool rememberMe)
         {
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
@@ -140,9 +143,6 @@ namespace DevNotes.Services.Implementations
             );
         }
 
-        /// <summary>
-        /// Sign out the currently authenticated user.
-        /// </summary>
         public async Task SignOutAsync()
         {
             await _signInManager.SignOutAsync();
